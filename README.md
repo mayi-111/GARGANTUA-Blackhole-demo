@@ -6,6 +6,7 @@
 ![GLSL ES 3.00](https://img.shields.io/badge/GLSL-ES%203.00-orange?style=for-the-badge)
 ![Zero Dependencies](https://img.shields.io/badge/Dependencies-Zero-success?style=for-the-badge)
 ![Physics](https://img.shields.io/badge/Physics-General%20Relativity-purple?style=for-the-badge)
+![Performance](https://img.shields.io/badge/FPS-60%20Realtime-brightgreen?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey?style=for-the-badge)
 
 <p align="center">
@@ -23,7 +24,69 @@
 
 不同于传统 3D 引擎通过贴图伪造光晕的做法，本项目基于 **纯手写 WebGL 2.0 片元着色器 (Fragment Shader)** 与 **四维时空光线测地线积分算法**，在浏览器端以 60 FPS 实时解算极端弯曲时空中的光线偏折轨迹、吸积盘等离子体超音速差动自转、相对论多普勒前向聚束以及爱因斯坦引力透镜双拱冠。
 
-整个工程为 **单文件零依赖（Zero Dependencies）** 设计，无需安装任何 Node.js 库、构建工具或外部引擎包，直接双击 `index.html` 即可在现代浏览器中启动沉浸式天体物理视听仿真。
+整个工程为 **单文件零依赖（Zero Dependencies）** 架构设计，无需安装任何 Node.js 库、构建工具或外部引擎包，直接双击 `index.html` 即可在现代浏览器中启动沉浸式天体物理视听仿真。
+
+---
+
+## 🛠️ 技术栈总览 (Tech Stack)
+
+| 领域 | 核心技术选型 | 技术设计与工程职责 |
+| :--- | :--- | :--- |
+| **底层图形接口** | **WebGL 2.0 API** | 单次绘制全屏正方形（Screen Quad），将所有密集光追算力卸载至 GPU 并行执行 |
+| **着色器语言** | **GLSL ES 3.00** | 纯手写高性能片元着色器（Fragment Shader），每像素每帧执行最高 96 步四维测地线数值积分 |
+| **数值分析与算法** | **Runge-Kutta 2 (RK2)** | 在 GPU 着色器内部以二阶中点法自适应求解爱因斯坦非线性微分方程（光子测地线方程） |
+| **程序化流体算法** | **Domain-Warped FBM** | 结合对数螺旋坐标与各向异性域扭曲，生成切向超高频微反差等离子体纤维细丝 |
+| **原生声音物理引擎** | **Web Audio API** | 原生低频双晶体振荡器（42Hz/55Hz）与低通滤波器，纯数学合成深空重力波共鸣与 LIGO Chirp 鸣响 |
+| **前端架构与布局** | **HTML5 / CSS3 / ES6+** | 玻璃拟态（Glassmorphism）、动态避让无遮挡响应式布局、三维阻尼插值系统 |
+| **数据沙盒持久化** | **LocalStorage + Blob API** | 预设度规的浏览器持久沙盒存储，以及基于原生 Blob 构建的外部 JSON 配置文件导出与导入 |
+
+---
+
+## 🔬 核心实现原理与着色流水线 (Implementation & Architecture)
+
+```mermaid
+flowchart TD
+    A["屏幕像素坐标 (NDC UV)"] --> B["三维摄像机光线反向构造<br/>Ray Generation: (ro, rd)"]
+    B --> C["四维时空测地线光追主循环<br/>Runge-Kutta 2 (RK2) 数值积分"]
+    C -->|穿过赤道面 y=0| D["吸积盘等离子体采样<br/>Keplerian Rotation + Doppler Beaming"]
+    C -->|半径 r <= Rs| E["跌入事件视界<br/>Event Horizon 纯黑吸收核"]
+    C -->|逃逸至外边界| F["3D 各向同性宇宙背景天球<br/>Galactic Bulge + Nebulae + M31"]
+    D --> G["引力透镜弯折双拱冠合成"]
+    F --> G
+    G --> H["ACES 电影级胶片色调映射<br/>Filmic Tonemapping + Optical Vignette"]
+    H --> I["60 FPS 高清全屏输出"]
+```
+
+### 1. 摄像机视线光线反向生成 (Ray Generation)
+- 在片元着色器 `main()` 中，将屏幕像素转化为归一化设备坐标 $p_{\text{ndc}} \in [-1, 1]$。
+- 根据观察者球坐标（仰角 `camPitch`、偏航角 `camYaw`、轨道半径 `camDistance`）及视场角 `u_cam_fov`（默认 $88^\circ$ IMAX 大广角），构造视线射线：
+  $$\vec{r}_0 = \vec{r}_{\text{cam}}, \quad \vec{d}_0 = \text{normalize}\left(p_x \vec{right} + p_y \vec{up} + \vec{forward} \cdot \cot(\text{fov}/2)\right)$$
+
+### 2. 弯曲时空测地线数值积分 (Geodesic Raymarching)
+- **引力偏折加速度**：光子在黑洞引力场中的运动轨迹遵循测地线方程。在有效势能形式下，光子受到的等效引力偏折加速度表示为：
+  $$\vec{a}_{\text{grav}} = -\frac{3 G M}{c^2} \frac{(\vec{r} \times \vec{v})^2}{r^5} \vec{r}$$
+- **Runge-Kutta 2 (RK2) 中点法**：通过二阶中点预测校正迭代更新光子位置与切向速度矢量，兼具极高数值稳定性与极低 GPU 功耗：
+  $$\vec{r}_{\text{mid}} = \vec{r}_n + \vec{v}_n \cdot \frac{\Delta t}{2}, \quad \vec{v}_{\text{mid}} = \text{normalize}\left(\vec{v}_n + \vec{a}(\vec{r}_n) \cdot \frac{\Delta t}{2}\right)$$
+  $$\vec{r}_{n+1} = \vec{r}_n + \vec{v}_{\text{mid}} \cdot \Delta t, \quad \vec{v}_{n+1} = \text{normalize}\left(\vec{v}_n + \vec{a}(\vec{r}_{\text{mid}}) \cdot \Delta t\right)$$
+- **自适应积分步长预算**：近视界区域步长自动加密以精准捕捉光子球（Photon Sphere）；远场区域步长递增以保证 60 FPS 满帧运行。
+
+### 3. 几何透镜双拱冠形成机制 (Gravitational Lensing Arc Projection)
+- 当光线穿过赤道面 $y = 0$ 时，着色器检测到符号跃迁并利用线性插值求出吸积盘相交点坐标。
+- 黑洞后方吸积盘发出的光子在穿越黑洞上下极区时被强引力向内拉弯偏折，最终射入摄像机。在观察者天球上，原本水平的二维吸积盘被撕裂投射为**跨越黑洞上方的巨型透镜拱冠与下方的镜像倒影环**。
+
+### 4. 高频等离子体与多普勒束流解算 (Fluid & Doppler Boosting)
+- **开普勒差动自转**：吸积盘等离子体角速度遵循物理开普勒定律 $\Omega(r) \propto r^{-1.5}$，内圈高速盘旋，外圈平缓吸积。
+- **发丝级流体细丝**：采用对数螺旋坐标 $\ln(r/R_{\text{in}})$ 与流体相位角 $\phi$，叠加密集域扭曲 FBM 细丝噪声，彻底消除传统 2D 贴图的模糊与接缝。
+- **相对论前向聚束 (Relativistic Beaming)**：考虑近光速轨道速度（$v \sim 0.5c - 0.86c$）引起的洛伦兹收缩，迎向观测者的一侧辐射放大高达 $4.8:1$，呈现强烈的**左侧紫外白炽蓝移、右侧暗淡红移**的真实物理不对称。
+
+### 5. 全 3D 各向同性无缝星空 (3D Isotropic Cosmos)
+- 放弃传统的二维天球全景贴图，使用三维坐标 $\vec{d}$ 驱动的 **3D 分形空间域扭曲**，在极轴俯瞰时完全没有极点拉伸或缝隙。
+- 建立倾角 $63^\circ$ 的真实银道坐标系（包含银心核球高光区、H-Alpha 洋红星云、O-III 极光蓝电离气体与暗分子裂缝）。
+- 沿视线方向在三维空间中对漂浮微尘进行多层深度采样，环绕时产生真实的三维空间运动视差（3D Parallax）。
+
+### 6. 电影级 ACES 胶片色调映射与零遮挡视口避让
+- **ACES 电影色调映射**：采用软肩部滚降高动态曲线压缩高光，完美保留吸积盘微细条纹，防止过曝死白。
+- **无遮挡视口动态重定心**：利用纯 CSS 状态机（`body.sidebar-open`），使底栏在侧边栏展开时自适应平移至未遮挡的观测区几何中心（$\text{left} = \frac{100\text{vw} - 384\text{px}}{2}$），彻底杜绝按键被侧边栏覆盖。
 
 ---
 
@@ -154,7 +217,7 @@ npx http-server -p 8080
 ```text
 d:\Gemini antigravity Test\
 ├── index.html            # 相对论天体物理仿真工作站完整核心源码 (HTML5 + WebGL 2.0 + Web Audio)
-├── README.md             # 项目中英文天体物理技术文档与使用手册
+├── README.md             # 项目中英文天体物理技术文档、技术栈与实现架构手册
 └── OPTIMIZATION_REPORT.md # 几何布局解耦、视口避让与数值稳定性工程报告
 ```
 
