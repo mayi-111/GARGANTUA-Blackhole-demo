@@ -6,7 +6,6 @@
 ![GLSL ES 3.00](https://img.shields.io/badge/GLSL-ES%203.00-orange?style=for-the-badge)
 ![Zero Dependencies](https://img.shields.io/badge/Dependencies-Zero-success?style=for-the-badge)
 ![Physics](https://img.shields.io/badge/Physics-General%20Relativity-purple?style=for-the-badge)
-![Performance](https://img.shields.io/badge/FPS-240%20Realtime-brightgreen?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey?style=for-the-badge)
 
 <p align="center">
